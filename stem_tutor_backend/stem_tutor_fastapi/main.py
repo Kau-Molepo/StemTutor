@@ -5,7 +5,6 @@ import requests
 from dotenv import load_dotenv
 import os
 import google.generativeai as genai
-#from google.cloud import ai_platform
 
 
 load_dotenv()
@@ -28,8 +27,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configuration (Load from environment variables or a config file)
-DJANGO_API_BASE_URL = "http://your-django-api-url/api/" 
+
+# Configuration (Load from environment variables)
+DJANGO_API_BASE_URL = os.environ.get("DJANGO_API_BASE_URL", "http://localhost:8000/api/")
 GEMINI_API_URL = "https://api.gemini.com/v1/completions"  # Replace with actual Gemini API URL
 GEMINI_API_KEY = api_key  # Add your Gemini API key
 
@@ -88,3 +88,31 @@ async def ask_question(question: Question):
         raise e  # Re-raise HTTPExceptions to pass them to the client
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing question: {e}")
+
+
+genai.configure(api_key=os.environ["GEMINI_API_KEY"])
+
+# Create the model
+generation_config = {
+  "temperature": 1,
+  "top_p": 0.95,
+  "top_k": 64,
+  "max_output_tokens": 8192,
+  "response_mime_type": "text/plain",
+}
+
+model = genai.GenerativeModel(
+  model_name="gemini-1.5-pro",
+  generation_config=generation_config,
+  # safety_settings = Adjust safety settings
+  # See https://ai.google.dev/gemini-api/docs/safety-settings
+)
+
+chat_session = model.start_chat(
+  history=[
+  ]
+)
+
+response = chat_session.send_message("INSERT_INPUT_HERE")
+
+print(response.text)
