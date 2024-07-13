@@ -2,16 +2,20 @@ from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 import requests
+from dotenv import load_dotenv
 import os
 import google.generativeai as genai
+#from google.cloud import ai_platform
+
+
+load_dotenv()
+
 
 # Manually set the API key to ensure it's correctly loaded
 api_key = os.environ.get('GEMINI_API_KEY')
 if api_key is None:
     raise ValueError("API key not found. Make sure it is set in the environment variables.")
 genai.configure(api_key=api_key)
-genai.sets('gemini-pro')
-genai.sets('gemini-pro-vision')
 
 app = FastAPI()
 
