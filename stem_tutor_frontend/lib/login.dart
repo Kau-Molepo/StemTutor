@@ -10,8 +10,8 @@ class STEMLoginScreen extends StatelessWidget {
             begin: Alignment.topRight,
             end: Alignment.bottomLeft,
             colors: [
-              Color.fromARGB(209, 6, 0, 29),  // Dark gray
-              Color.fromARGB(255, 4, 0, 32),  // Nearly black
+              Color.fromARGB(209, 0, 35, 82),  // Dark gray
+              Color.fromARGB(255, 0, 23, 49),  // Nearly black
             ],
           ),
         ),
