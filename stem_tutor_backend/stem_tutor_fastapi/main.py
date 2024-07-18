@@ -12,8 +12,9 @@ from datetime import datetime
 # Load environment variables
 load_dotenv()
 
+
 # Initialize Firebase
-cred = credentials.Certificate("path/to/your/firebase-adminsdk.json")
+cred = credentials.Certificate("B:\Documents\Projects\StemTutor\stemtutor-4cdc5-firebase-adminsdk-zfueo-a203f8c8a3.json")
 firebase_admin.initialize_app(cred)
 db = firestore.client()
 
