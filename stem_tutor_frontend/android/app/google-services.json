@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "979647142707",
+    "project_id": "stemtutor-4cdc5",
+    "storage_bucket": "stemtutor-4cdc5.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:979647142707:android:a61f8f47b2027de93f7c46",
+        "android_client_info": {
+          "package_name": "com.stemtutor.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyClppI071ShqRchxH8jxnLZqymICa-Z2W0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
