@@ -12,7 +12,20 @@
           "package_name": "com.stemtutor.app"
         }
       },
-      "oauth_client": [],
+      "oauth_client": [
+        {
+          "client_id": "979647142707-pceuggd7v125e2hker09b5ouhjal78um.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.stemtutor.app",
+            "certificate_hash": "4e38a324c66908543e47cb664c2725d0f0beeac4"
+          }
+        },
+        {
+          "client_id": "979647142707-0061nsjkqbo88v6hm5375jmv37e2hui6.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
       "api_key": [
         {
           "current_key": "AIzaSyClppI071ShqRchxH8jxnLZqymICa-Z2W0"
@@ -20,7 +33,19 @@
       ],
       "services": {
         "appinvite_service": {
-          "other_platform_oauth_client": []
+          "other_platform_oauth_client": [
+            {
+              "client_id": "979647142707-0061nsjkqbo88v6hm5375jmv37e2hui6.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "979647142707-ecrfgeqgih09qp2q6bm3rjosujkq9hgl.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.stemTutorFrontend"
+              }
+            }
+          ]
         }
       }
     }
