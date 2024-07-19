@@ -1,41 +1,10 @@
 from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from typing import List, Optional
-import google.generativeai as genai
-import firebase_admin
-from firebase_admin import credentials, firestore, auth
-from dotenv import load_dotenv
-import os
-from datetime import datetime, timedelta
-from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
-import requests
-import jwt
-
-# Load environment variables
-load_dotenv()
-
-# Initialize Firebase
-cred = credentials.Certificate("B:/Documents/Projects/StemTutor/stemtutor-4cdc5-firebase-adminsdk-zfueo-a203f8c8a3.json")
-firebase_admin.initialize_app(cred)
-db = firestore.client()
-
-# Initialize Gemini
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
-
-# Create the model
-generation_config = {
-    "temperature": 2,
-    "top_p": 0.95,
-    "top_k": 65,
-    "max_output_tokens": 150,
-    "response_mime_type": "text/plain",
-}
-
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-pro",
-    generation_config=generation_config,
-)
+import uvicorn
+from models import User, Question, Feedback, UpdateProfile
+from database import *
+from auth import *
+from ai import generate_answer
 
 app = FastAPI()
 
@@ -48,112 +17,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# JWT Authentication Setup
-SECRET_KEY = "your-secret-key" 
-ALGORITHM = "HS256"
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
-
-def create_access_token(data: dict):
-    to_encode = data.copy()
-    expire = datetime.utcnow() + timedelta(minutes=30)
-    to_encode.update({"exp": expire})
-    encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
-    return encoded_jwt
-
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    credentials_exception = HTTPException(status_code=401, detail="Could not validate credentials", headers={"WWW-Authenticate": "Bearer"})
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
-            raise credentials_exception
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token has expired", headers={"WWW-Authenticate": "Bearer"})
-    except jwt.InvalidTokenError:
-        raise credentials_exception
-    user = auth.get_user(user_id)
-    if user is None:
-        raise credentials_exception
-    return user
-
-def verify_password(email, password):
-    api_key = os.getenv("FIREBASE_API_KEY")
-    url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key={api_key}"
-    payload = {
-        "email": email,
-        "password": password,
-        "returnSecureToken": True
-    }
-    response = requests.post(url, json=payload)
-    if response.status_code == 200:
-        return response.json()
-    else:
-        return None
-
-# Pydantic models
-class User(BaseModel):
-    email: str
-    password: str
-    grade_level: int
-    subjects: List[str]
-
-class Question(BaseModel):
-    text: str
-    subject: str
-    grade_level: int
-
-class Answer(BaseModel):
-    text: str
-    explanation: Optional[str] = None
-
-class Feedback(BaseModel):
-    question_id: str
-    helpful: bool
-
-class UpdateProfile(BaseModel):
-    grade_level: int
-    subjects: List[str]
-
-# Helper functions
-def create_firebase_user(email: str, password: str):
-    try:
-        user = auth.create_user(email=email, password=password)
-        return user.uid
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=f"Error creating user: {str(e)}")
-
-def store_user_data(user_id: str, grade_level: int, subjects: List[str]):
-    db.collection('users').document(user_id).set({
-        'grade_level': grade_level,
-        'subjects': subjects,
-        'created_at': firestore.SERVER_TIMESTAMP
-    })
-
-def store_question_answer(user_id: str, question: str, answer: str, subject: str, grade_level: int):
-    doc_ref = db.collection('qa_pairs').document()  # Create a document reference
-    doc_ref.set({
-        'user_id': user_id,
-        'question': question,
-        'answer': answer,
-        'subject': subject,
-        'grade_level': grade_level,
-        'timestamp': firestore.SERVER_TIMESTAMP
-    })
-    return doc_ref.id  # Return the document ID
-
-def get_user_progress(user_id: str):
-    qa_pairs = db.collection('qa_pairs').where('user_id', '==', user_id).get()
-    subjects_covered = set()
-    total_questions = 0
-    for qa in qa_pairs:
-        subjects_covered.add(qa.to_dict()['subject'])
-        total_questions += 1
-    return {
-        'total_questions': total_questions,
-        'subjects_covered': list(subjects_covered)
-    }
-
-# Endpoints
 @app.post("/register/")
 async def register_user(user: User):
     try:
@@ -179,33 +42,19 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends()):
 @app.post("/ask_question/")
 async def ask_question(question: Question, current_user: User = Depends(get_current_user)):
     try:
-        # Create the prompt for the model
         prompt = f"Question: {question.text}\nProvide a concise answer and a brief explanation."
-
-        # Generate the content using the `generate_content` method
-        response = model.generate_content(
-            contents={"parts": [{"text": prompt}]},  # Adjusted to match the expected format
-            generation_config=generation_config,
-            stream=False
-        )
-
-        # Extract the generated content from the response
-        if response:
-            answer = response.text
-            
-            # Store the question and answer in Firestore
+        answer = generate_answer(prompt)
+        if answer:
             qa_id = store_question_answer(current_user.uid, question.text, answer, question.subject, question.grade_level)
-
-            return {"qa_id": qa_id, "question": question.text, "answer": answer}
+            return {"qa_id": qa_id, "question": question.text, "answer": answer, "user_id": current_user.uid}
         else:
             raise HTTPException(status_code=500, detail="Model did not return a valid response")
     except AttributeError as e:
-        print(f"Error: {e}")  # Log the specific error
+        print(f"Error: {e}")
         raise HTTPException(status_code=500, detail="Error processing question: missing user ID")
-    except Exception as e: 
+    except Exception as e:
         print(f"Error in ask_question endpoint: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Error processing question: {str(e)}")
-
 
 @app.get("/personalized_questions/{user_id}")
 async def personalized_questions(user_id: str, current_user: User = Depends(get_current_user)):
@@ -241,10 +90,13 @@ async def submit_feedback(feedback: Feedback, current_user: User = Depends(get_c
 
 @app.get("/user_progress/")
 async def user_progress(current_user: User = Depends(get_current_user)):
-    progress = get_user_progress(current_user.uid)
-    return progress
+    try:
+        progress = get_user_progress(current_user.uid)
+        return progress
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error retrieving user progress: {str(e)}")
 
-@app.put("/profile/")
+@app.put("/update_profile/")
 async def update_profile(profile: UpdateProfile, current_user: User = Depends(get_current_user)):
     try:
         db.collection('users').document(current_user.uid).update({
@@ -254,6 +106,17 @@ async def update_profile(profile: UpdateProfile, current_user: User = Depends(ge
         return {"message": "Profile updated successfully"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error updating profile: {str(e)}")
+    
+# @app.put("/profile/")
+# async def update_profile(profile: UpdateProfile, current_user: User = Depends(get_current_user)):
+#     try:
+#         db.collection('users').document(current_user.uid).update({
+#             'grade_level': profile.grade_level,
+#             'subjects': profile.subjects
+#         })
+#         return {"message": "Profile updated successfully"}
+#     except Exception as e:
+#         raise HTTPException(status_code=500, detail=f"Error updating profile: {str(e)}")
 
 @app.get("/question_history/")
 async def question_history(current_user: User = Depends(get_current_user)):
@@ -263,7 +126,6 @@ async def question_history(current_user: User = Depends(get_current_user)):
         return history
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving question history: {str(e)}")
-
 
 @app.get("/leaderboard/")
 async def leaderboard():
@@ -281,7 +143,6 @@ async def leaderboard():
     leaderboard.sort(key=lambda x: (x['total_questions'], x['subjects_covered']), reverse=True)
     return leaderboard
 
-
 @app.get("/daily_challenge/")
 async def daily_challenge():
     try:
@@ -293,15 +154,10 @@ async def daily_challenge():
         grade_level = random.choice(grade_levels)
         
         question = "Solve for x: 2x + 3 = 7"  # This should be dynamically generated based on the subject and grade level
-        response = model.generate_content(
-            contents={"parts": [{"text": question}]},
-            generation_config=generation_config,
-            stream=False
-        )
+        response = generate_answer(question)
         
-        # Extract the generated content from the response
         if response:
-            answer = response.text
+            answer = response
             return {"question": question, "answer": answer}
         else:
             raise HTTPException(status_code=500, detail="Model did not return a valid response")
@@ -309,7 +165,5 @@ async def daily_challenge():
         raise HTTPException(status_code=500, detail=f"Error processing daily challenge: {str(e)}")
 
 
-
 if __name__ == "__main__":
-    import uvicorn
     uvicorn.run(app, host="127.0.0.1", port=8000)
